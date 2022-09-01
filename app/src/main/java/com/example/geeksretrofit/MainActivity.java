@@ -2,10 +2,12 @@ package com.example.geeksretrofit;
 import android.Manifest;
 import android.content.Context;
 import android.content.Intent;
+import android.database.Cursor;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Environment;
 import android.os.FileUtils;
+import android.provider.MediaStore;
 import android.util.Log;
 import android.view.View;
 import android.widget.Button;
@@ -15,6 +17,7 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.loader.content.CursorLoader;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
@@ -39,6 +42,7 @@ import java.util.List;
 import okhttp3.MediaType;
 import okhttp3.MultipartBody;
 import okhttp3.RequestBody;
+import okhttp3.ResponseBody;
 import retrofit2.Call;
 import retrofit2.Callback;
 import retrofit2.Response;
@@ -47,14 +51,13 @@ import retrofit2.converter.gson.GsonConverterFactory;
 
 public class MainActivity extends AppCompatActivity {
 
-    // creating variables for our edittext,
-    // button, textview and progressbar.
+
     private EditText descriptionEdt, date_publishedEdt;
     private Button postDataBtn, selectVideoBtn;
     private TextView responseTV;
     private ProgressBar loadingPB;
-    String path;
-    Uri uri;
+    public String path;
+    public Uri uri;
 
     private static final int BUFFER_SIZE = 1024 * 2;
 
@@ -65,13 +68,7 @@ public class MainActivity extends AppCompatActivity {
 
         requestMultiplePermissions();
 
-        // initializing our views
-        descriptionEdt = findViewById(R.id.idEdtDescription);
-        date_publishedEdt = findViewById(R.id.idEdtDate_published);
-        postDataBtn = findViewById(R.id.idBtnPost);
-        responseTV = findViewById(R.id.idTVResponse);
-        loadingPB = findViewById(R.id.idLoadingPB);
-        selectVideoBtn = findViewById(R.id.idBtnSelectVideo);
+        initialize();
 
         selectVideoBtn.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -80,30 +77,36 @@ public class MainActivity extends AppCompatActivity {
                 intent.setAction(Intent.ACTION_GET_CONTENT);
                 intent.setType("video/*");
                 startActivityForResult(intent,1);
+
+                /*Intent i = new Intent(Intent.ACTION_PICK, MediaStore.Images.Media.EXTERNAL_CONTENT_URI);
+                startActivityForResult(i, 100);*/
+
             }
         });
 
 
-
-        // adding on click listener to our button.
+        //******************************* post request after click the button ********************************************************//
         postDataBtn.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                // validating if the text field is empty or not.
                 if (descriptionEdt.getText().toString().isEmpty() && date_publishedEdt.getText().toString().isEmpty()) {
                     Toast.makeText(MainActivity.this, "Please enter both the values", Toast.LENGTH_SHORT).show();
                     return;
                 }
                 // calling a method to post the data and passing our name and job.
-                /*File file = null;
+                File file = null;
                 try {
                     file = new File(path);
                 } catch (Exception e) {
                     Log.d("FILE SELECTED?",e.getMessage());
-                }*/
-                postData(descriptionEdt.getText().toString(), date_publishedEdt.getText().toString(), uri);
+                }
+                //DataModal creation
+                //DataModal dataModal = new DataModal(descriptionEdt.getText().toString(), date_publishedEdt.getText().toString(), file);
+                postData(descriptionEdt.getText().toString(), date_publishedEdt.getText().toString(), file);
+                //postData(dataModal);
             }
         });
+        //***********************************************************************************************************************//
     }
 
 
@@ -114,13 +117,23 @@ public class MainActivity extends AppCompatActivity {
         if (resultCode == RESULT_OK) {
             // Get the Uri of the selected file
             uri = data.getData();
-
-            path = getFilePathFromURI(MainActivity.this,uri);
+            path = getFilePathFromURI(this, uri);
             Log.d("PATH OF SELECTED FILE:",path);
         }
         super.onActivityResult(requestCode, resultCode, data);
 
     }
+    /*protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == 100 && resultCode == RESULT_OK && data != null) {
+            //the image URI
+            Uri selectedImageUri = data.getData();
+            path = getFilePathFromURI(this, selectedImageUri);
+            Log.d("FILE PATH IS?",path);
+
+
+        }
+    }*/
     //************************path selects successfully**********************//
 
 
@@ -132,33 +145,29 @@ public class MainActivity extends AppCompatActivity {
 
 
 
-    private void postData(String description, String date_published, Uri uri) {
+    private void postData(String description, String date_published, File file) {
 
         // below line is for displaying our progress bar.
         loadingPB.setVisibility(View.VISIBLE);
-
-        File file = new File(getFilePathFromURI(MainActivity.this, uri));
 
         RequestBody descBody = RequestBody.create(MediaType.parse("text/plain"), description);
         RequestBody dateBody = RequestBody.create(MediaType.parse("text/plain"), date_published);
         RequestBody requestFile =
                 RequestBody.create(
-                        MediaType.parse(getContentResolver().getType(uri)),
+                        MediaType.parse(/*getContentResolver().getType(uri)*/"video"),
                         file
                 );
-
-        // MultipartBody.Part is used to send also the actual file name
         MultipartBody.Part fileBody =
-                MultipartBody.Part.createFormData("video", file.getName(), requestFile);
+                MultipartBody.Part.createFormData("file", file.getName(), requestFile);
 
-        Gson gson = new GsonBuilder()
+        /*Gson gson = new GsonBuilder()
                 .setDateFormat("yyyy-MM-dd'T'HH:mm:ssZ")
-                .create();
+                .create();*/
         // on below line we are creating a retrofit
         // builder and passing our base url
         Retrofit retrofit = new Retrofit.Builder()
                 .baseUrl(RetrofitAPI.BASE_URL)
-                .addConverterFactory(GsonConverterFactory.create(gson))
+                .addConverterFactory(GsonConverterFactory.create())
                 .build();
         // below line is to create an instance for our retrofit api class.
         RetrofitAPI retrofitAPI = retrofit.create(RetrofitAPI.class);
@@ -182,7 +191,7 @@ public class MainActivity extends AppCompatActivity {
 
                     ResponseBody responseFromAPI = response.body();
 
-                    String responseString = "Response Code : " + response.code() + "\ndescription : " + responseFromAPI.getResponse() + "\n";
+                    String responseString = "Response Code : " + response.code() + "\ndescription : " + response.message() + "\n";
 
                     responseTV.setText(responseString);
                 }
@@ -206,6 +215,14 @@ public class MainActivity extends AppCompatActivity {
 
 
 
+    private void initialize(){
+        descriptionEdt = findViewById(R.id.idEdtDescription);
+        date_publishedEdt = findViewById(R.id.idEdtDate_published);
+        postDataBtn = findViewById(R.id.idBtnPost);
+        responseTV = findViewById(R.id.idTVResponse);
+        loadingPB = findViewById(R.id.idLoadingPB);
+        selectVideoBtn = findViewById(R.id.idBtnSelectVideo);
+    }
 
     private void  requestMultiplePermissions(){
         Dexter.withActivity(this)
@@ -306,5 +323,16 @@ public class MainActivity extends AppCompatActivity {
             }
         }
         return count;
+    }
+
+    private String getRealPathFromURI(Uri contentUri) {
+        String[] proj = {MediaStore.Images.Media.DATA};
+        CursorLoader loader = new CursorLoader(this, contentUri, proj, null, null, null);
+        Cursor cursor = loader.loadInBackground();
+        int column_index = ((Cursor) cursor).getColumnIndexOrThrow(MediaStore.Images.Media.DATA);
+        cursor.moveToFirst();
+        String result = cursor.getString(column_index);
+        cursor.close();
+        return result;
     }
 }
